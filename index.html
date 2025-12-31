@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>duyxyz Gallery</title>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#ffffff" />
+  
+  <!-- Fancybox CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0/dist/fancybox/fancybox.css" />
+  
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      background: #ffffff;
+      color: #000;
+      overflow-x: hidden;
+    }
+
+    /* 🌌 Màn hình tải */
+    .loading-screen {
+      position: fixed;
+      inset: 0;
+      background: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      transition: opacity 0.6s ease, visibility 0.6s ease;
+    }
+
+    .loading-screen.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .loading-screen.shrinking {
+      animation: screenShrink 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+    }
+
+    @keyframes screenShrink {
+      0% {
+        clip-path: circle(100% at 50% 50%);
+      }
+      100% {
+        clip-path: circle(0% at 50% 50%);
+      }
+    }
+
+    .loader-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transition: transform 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55), opacity 0.6s ease;
+    }
+
+    .loading-screen.shrinking .loader-wrapper {
+      transform: scale(0);
+      opacity: 0;
+    }
+
+    .loading-progress {
+      font-size: 16px;
+      color: #666;
+      margin-top: 25px;
+    }
+
+    /* ⚙️ Loader - Heart */
+    .loader {
+      position: relative;
+      width: 40px;
+      height: 60px;
+      animation: heartBeat 1.2s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
+    }
+    
+    .loader:before,
+    .loader:after {
+      content: "";
+      background: #ff4444;
+      width: 40px;
+      height: 60px;
+      border-radius: 50px 50px 0 0;
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      transform: rotate(45deg);
+      transform-origin: 50% 68%;
+      box-shadow: 5px 4px 5px rgba(0, 0, 0, 0.1) inset;
+    }
+    
+    .loader:after {
+      transform: rotate(-45deg);
+    }
+    
+    @keyframes heartBeat {
+      0% { transform: scale(0.95); }
+      5% { transform: scale(1.1); }
+      39% { transform: scale(0.85); }
+      45% { transform: scale(1); }
+      60% { transform: scale(0.95); }
+      100% { transform: scale(0.9); }
+    }
+
+    /* 🧱 Masonry Layout */
+    .gallery {
+      position: relative;
+      max-width: 100%;
+      margin: 0 auto;
+      padding: 0;
+      opacity: 0;
+    }
+
+    .gallery.show {
+      opacity: 1;
+    }
+
+    .gallery-item {
+      position: absolute;
+      width: calc(25% - 12px);
+      background: #f5f5f5;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+      opacity: 0;
+      will-change: transform, opacity;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.3s ease;
+      cursor: pointer;
+      display: block;
+      text-decoration: none;
+    }
+
+    .gallery-item.loaded {
+      opacity: 1;
+    }
+
+    .gallery-item img {
+      width: 100%;
+      height: auto;
+      display: block;
+      border-radius: 12px;
+      transition: transform 0.2s ease;
+    }
+
+    .gallery-item:hover {
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+      z-index: 1;
+    }
+
+    .gallery-item:hover img {
+      transform: scale(1.05);
+    }
+
+    /* Tắt hover trên thiết bị cảm ứng */
+    @media (hover: none) and (pointer: coarse) {
+      .gallery-item:hover {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        z-index: auto;
+      }
+
+      .gallery-item:hover img {
+        transform: scale(1);
+      }
+    }
+
+    /* Responsive */
+    @media (max-width: 1200px) {
+      .gallery-item {
+        width: calc(33.333% - 12px);
+      }
+    }
+
+    @media (max-width: 900px) {
+      .gallery-item {
+        width: calc(50% - 12px);
+      }
+    }
+
+    @media (max-width: 600px) {
+      .gallery-item {
+        width: calc(50% - 10px);
+      }
+    }
+
+    /* 🎨 Fancybox Custom Styles */
+    .fancybox__backdrop {
+      background: rgba(0, 0, 0, 0.95);
+    }
+  </style>
+</head>
+<body>
+  <div class="loading-screen" id="loadingScreen">
+    <div class="loader-wrapper">
+      <span class="loader"></span>
+      <div class="loading-progress" id="loadingProgress">Đang tải ảnh...</div>
+    </div>
+  </div>
+  
+  <div class="gallery" id="gallery"></div>
+
+  <!-- Fancybox JS -->
+  <script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0/dist/fancybox/fancybox.umd.js"></script>
+
+  <script>
+    const gallery = document.getElementById("gallery");
+    const loadingScreen = document.getElementById("loadingScreen");
+    const loadingProgress = document.getElementById("loadingProgress");
+
+    const TOTAL_IMAGES = 100;
+    let loadedImages = 0;
+    const imageData = [];
+
+    // 🧱 MASONRY LAYOUT ENGINE
+    class Masonry {
+      constructor(container) {
+        this.container = container;
+        this.items = [];
+        this.columnHeights = [];
+        this.columnCount = 4;
+        this.gap = 15;
+        this.columnWidth = 0;
+        
+        this.updateColumns();
+        window.addEventListener('resize', () => this.debounce(() => this.relayout(), 200));
+      }
+
+      updateColumns() {
+        const width = window.innerWidth;
+        if (width <= 600) this.columnCount = 2;
+        else if (width <= 900) this.columnCount = 2;
+        else if (width <= 1200) this.columnCount = 3;
+        else this.columnCount = 4;
+
+        const containerWidth = window.innerWidth;
+        this.columnWidth = (containerWidth - (this.columnCount + 1) * this.gap) / this.columnCount;
+      }
+
+      addItem(element, height) {
+        this.items.push({ element, height });
+        this.placeItem(element, height);
+      }
+
+      placeItem(element, height) {
+        if (this.columnHeights.length === 0) {
+          this.columnHeights = new Array(this.columnCount).fill(0);
+        }
+
+        const shortestColumn = this.columnHeights.indexOf(Math.min(...this.columnHeights));
+        const x = shortestColumn * (this.columnWidth + this.gap) + this.gap;
+        const y = this.columnHeights[shortestColumn] + this.gap;
+
+        element.dataset.x = x;
+        element.dataset.y = y;
+        element.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+        element.style.width = `${this.columnWidth}px`;
+
+        this.columnHeights[shortestColumn] += height + this.gap;
+
+        const maxHeight = Math.max(...this.columnHeights);
+        this.container.style.height = `${maxHeight + this.gap}px`;
+      }
+
+      relayout() {
+        this.updateColumns();
+        this.columnHeights = new Array(this.columnCount).fill(0);
+        
+        this.items.forEach(({ element, height }) => {
+          this.placeItem(element, height);
+        });
+      }
+
+      debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+          const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+          };
+          clearTimeout(timeout);
+          timeout = setTimeout(later, wait);
+        };
+      }
+    }
+
+    const masonry = new Masonry(gallery);
+
+    // 🚀 PRELOAD TẤT CẢ ẢNH
+    function preloadImages() {
+      const promises = [];
+      
+      for (let i = 1; i <= TOTAL_IMAGES; i++) {
+        const file = `picture/${i}.webp`;
+        const promise = new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            const aspectRatio = img.height / img.width;
+            imageData.push({
+              index: i,
+              file,
+              aspectRatio,
+              width: img.width,
+              height: img.height,
+              exists: true
+            });
+            loadedImages++;
+            updateProgress();
+            resolve();
+          };
+          img.onerror = () => {
+            loadedImages++;
+            updateProgress();
+            resolve();
+          };
+          img.src = file;
+        });
+        promises.push(promise);
+      }
+      
+      return Promise.all(promises);
+    }
+
+    function createGallery() {
+      imageData.sort((a, b) => a.index - b.index);
+
+      const fragment = document.createDocumentFragment();
+      
+      imageData.forEach((data, idx) => {
+        const a = document.createElement("a");
+        a.href = data.file;
+        a.className = "gallery-item";
+        a.dataset.fancybox = "gallery";
+        a.dataset.caption = `Ảnh ${data.index}`;
+        // Thêm width/height để Fancybox biết trước kích thước
+        a.dataset.width = data.width;
+        a.dataset.height = data.height;
+
+        const img = document.createElement("img");
+        img.src = data.file;
+        img.alt = `Ảnh ${data.index}`;
+
+        a.appendChild(img);
+        fragment.appendChild(a);
+
+        const calculatedHeight = masonry.columnWidth * data.aspectRatio;
+        masonry.addItem(a, calculatedHeight);
+
+        const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        
+        if (!isTouch) {
+          a.addEventListener('mouseenter', function() {
+            const x = parseFloat(this.dataset.x);
+            const y = parseFloat(this.dataset.y);
+            this.style.transform = `translate3d(${x}px, ${y - 5}px, 0)`;
+          });
+
+          a.addEventListener('mouseleave', function() {
+            const x = parseFloat(this.dataset.x);
+            const y = parseFloat(this.dataset.y);
+            this.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+          });
+        }
+
+        setTimeout(() => {
+          a.classList.add('loaded');
+        }, idx * 10);
+      });
+      
+      gallery.appendChild(fragment);
+      
+      // 🎯 Khởi tạo Fancybox
+      if (typeof Fancybox !== 'undefined') {
+        Fancybox.bind("[data-fancybox='gallery']", {
+          // Tính năng zoom tuyệt vời
+          Images: {
+            zoom: true,
+            click: "toggleZoom",
+            wheel: "zoom",
+            fit: "contain",
+            initialSize: "fit",
+            protected: false, // Cho phép kéo thả
+          },
+          // Navigation
+          Toolbar: {
+            display: {
+              left: ["infobar"],
+              middle: [],
+              right: ["zoom", "slideshow", "fullscreen", "thumbs", "close"],
+            },
+          },
+          // Keyboard shortcuts
+          Keyboard: {
+            Escape: "close",
+            Delete: "close",
+            Backspace: "close",
+            PageUp: "next",
+            PageDown: "prev",
+            ArrowUp: "prev",
+            ArrowDown: "next",
+            ArrowRight: "next",
+            ArrowLeft: "prev",
+          },
+          // Animation
+          animated: true,
+          hideScrollbar: true,
+          trapFocus: true,
+          placeFocusBack: true,
+          autoFocus: true,
+          // Loop
+          infinite: true,
+          // Preload nhiều ảnh hơn (tăng từ 2 lên 4)
+          preload: 4,
+          // Click outside to close
+          backdropClick: "close",
+          // Touch
+          touch: {
+            vertical: true,
+            momentum: true,
+          },
+          // Loading tốt hơn
+          idle: false,
+          compact: false,
+          dragToClose: true,
+          contentClick: "toggleZoom",
+          // Transition nhanh hơn
+          showClass: "fancybox-fadeIn",
+          hideClass: "fancybox-fadeOut",
+        });
+      } else {
+        console.error('Fancybox không load được!');
+      }
+    }
+
+    function updateProgress() {
+      const percent = Math.round((loadedImages / TOTAL_IMAGES) * 100);
+      loadingProgress.textContent = `Đang tải ${percent}%`;
+      
+      if (loadedImages === TOTAL_IMAGES) {
+        setTimeout(() => {
+          loadingScreen.classList.add("shrinking");
+          
+          setTimeout(() => {
+            loadingScreen.classList.add("hidden");
+            gallery.classList.add("show");
+          }, 600);
+        }, 100);
+      }
+    }
+
+    // 🎯 KHỞI ĐỘNG
+    async function init() {
+      await preloadImages();
+      createGallery();
+    }
+
+    init();
+  </script>
+
+  <!-- 🧩 Service worker -->
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js")
+        .then(reg => console.log("✅ Service Worker đã đăng ký:", reg))
+        .catch(err => console.error("❌ Lỗi Service Worker:", err));
+    }
+  </script>
+</body>
+</html>
